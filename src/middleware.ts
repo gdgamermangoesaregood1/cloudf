@@ -1,0 +1,63 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { BASE_SECURITY_HEADERS, buildAppCsp } from "@/lib/security/headers";
+import { SESSION_COOKIE } from "@/lib/auth/cookie-names";
+
+const PROTECTED_PREFIXES = ["/dashboard", "/challenges"];
+const GUEST_ONLY_PATHS = ["/login", "/register"];
+
+/**
+ * Proxy/middleware runs on the Edge runtime and must stay database-free, so
+ * it only performs an *optimistic* redirect based on cookie presence (per
+ * Next.js's recommended auth pattern). The authoritative check — is this
+ * session actually valid, and is this specific challenge unlocked for this
+ * user — always happens server-side in the page/route handler itself
+ * (see src/lib/challenges/access.ts), which is the only place that can
+ * safely talk to the database.
+ */
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
+
+  if (
+    PROTECTED_PREFIXES.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    ) &&
+    !hasSessionCookie
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("next", pathname);
+    return applyHeaders(NextResponse.redirect(url), pathname);
+  }
+
+  if (GUEST_ONLY_PATHS.includes(pathname) && hasSessionCookie) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return applyHeaders(NextResponse.redirect(url), pathname);
+  }
+
+  return applyHeaders(NextResponse.next(), pathname);
+}
+
+function applyHeaders(response: NextResponse, pathname: string): NextResponse {
+  // The stored-XSS sandbox document sets its own, much more restrictive CSP
+  // in its route handler (buildXssFrameCsp) — do not overwrite it here.
+  if (!pathname.startsWith("/api/challenges/xss/frame")) {
+    response.headers.set("Content-Security-Policy", buildAppCsp());
+    response.headers.set("X-Frame-Options", "DENY");
+  }
+  for (const [key, value] of Object.entries(BASE_SECURITY_HEADERS)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all paths except static assets, so headers apply to pages and
+     * API routes alike.
+     */
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
+};

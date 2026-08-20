@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------
+# LOCAL DEVELOPMENT ONLY.
+#
+# This stack is intentionally NOT configured for public/production hosting:
+#   - Ports are bound to 127.0.0.1 only (not exposed to your LAN/internet).
+#   - The Postgres SUPERUSER account is only ever used by the one-off
+#     `migrate` step, never by the running `web` app.
+#   - The app contains deliberately vulnerable challenge endpoints. Do not
+#     remove the 127.0.0.1 binding, put this behind a public reverse proxy,
+#     or deploy it to a cloud provider. See README.md for details.
+# ---------------------------------------------------------------------------
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-security_training}
+      APP_DB_USER: ${APP_DB_USER:-app_role}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      SQLI_DB_USER: ${SQLI_DB_USER:-sqli_role}
+      SQLI_DB_PASSWORD: ${SQLI_DB_PASSWORD:?SQLI_DB_PASSWORD is required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    # No ports published: only the `migrate` and `web` services (on the
+    # same Docker network) can reach Postgres.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DB:-security_training}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-security_training}
+      POSTGRES_SUPERUSER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_SUPERUSER_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD is required}
+
+  web:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-security_training}
+      # Deliberately NOT the superuser account — least privilege at runtime.
+      APP_DB_USER: ${APP_DB_USER:-app_role}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      SQLI_DB_USER: ${SQLI_DB_USER:-sqli_role}
+      SQLI_DB_PASSWORD: ${SQLI_DB_PASSWORD:?SQLI_DB_PASSWORD is required}
+      XSS_RENDER_TOKEN_TTL_MINUTES: ${XSS_RENDER_TOKEN_TTL_MINUTES:-5}
+    ports:
+      # Local-only: bound to loopback, not 0.0.0.0. See warning above.
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  pgdata:

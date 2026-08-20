@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.env
+.env.local
+tests/.pglite-tmp
+npm-debug.log*
+coverage
+*.md
