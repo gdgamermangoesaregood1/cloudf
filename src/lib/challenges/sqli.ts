@@ -19,6 +19,16 @@ const CATALOG = [
 
 const FLAG_PATTERN = /FLAG-SQLI-[0-9a-f]{16}/;
 
+function crossesIsolationBoundary(term: string): boolean {
+  const withoutComments = term
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--[^\r\n]*/g, "");
+
+  // UNION/boolean/error-based injection remains intentionally available.
+  // Stacked statements are outside this challenge's query-expression scope.
+  return /;/.test(withoutComments);
+}
+
 /**
  * Seeds this player's row set in the challenge-only `sqli_challenge.items`
  * table via the app_role connection (INSERT/UPDATE/DELETE only — app_role
@@ -59,6 +69,13 @@ export async function searchItems(
   userId: string,
   term: string,
 ): Promise<SqliSearchOutcome> {
+  if (crossesIsolationBoundary(term)) {
+    return {
+      rows: [],
+      error: "That payload crosses the lab isolation boundary.",
+    };
+  }
+
   // completeChallenge() below intentionally runs AFTER withSqliUserContext
   // returns (i.e. once the sqli_role transaction/connection has fully
   // committed and closed) rather than nested inside it — keeping the two

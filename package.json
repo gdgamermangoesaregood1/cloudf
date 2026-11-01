@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "deploy": "opennextjs-cloudflare deploy",
+    "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -12,29 +15,33 @@
     "test:watch": "vitest",
     "migrate": "tsx db/migrate.ts",
     "seed:roles": "tsx db/apply-roles.ts",
+    "stripe:webhook": "stripe listen --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted --forward-to localhost:3000/api/billing/webhook",
     "format": "prettier --write ."
   },
   "dependencies": {
-    "next": "15.5.23",
+    "@noble/hashes": "2.4.0",
+    "@opennextjs/cloudflare": "1.20.15",
+    "next": "15.5.28",
+    "pg": "^8.13.1",
     "react": "^19",
     "react-dom": "^19",
-    "@node-rs/argon2": "^2.0.2",
-    "pg": "^8.13.1",
+    "stripe": "^18.5.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
     "@types/node": "^20",
+    "@types/pg": "^8.11.10",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/pg": "^8.11.10",
+    "dotenv": "^16.4.7",
     "eslint": "^9",
-    "eslint-config-next": "15.5.23",
-    "typescript": "^5",
-    "tsx": "^4.19.2",
-    "vitest": "^2.1.8",
-    "@electric-sql/pglite": "^0.2.17",
+    "eslint-config-next": "15.5.28",
     "prettier": "^3.4.2",
-    "dotenv": "^16.4.7"
+    "rclone.js": "0.6.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.156.0"
   }
 }
-

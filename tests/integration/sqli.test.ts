@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createTestDb, type TestDb } from "./db-test-harness";
 import { __setPoolsForTests } from "@/lib/db/pool";
+import { withSqliUserContext } from "@/lib/db/pool";
 import { initializeProgress, getProgress } from "@/lib/challenges/progress";
 import { seedSqliItems, searchItems } from "@/lib/challenges/sqli";
 
@@ -23,6 +24,18 @@ describe("SQL injection challenge (isolated schema + least-privilege role + RLS)
   afterEach(async () => {
     __setPoolsForTests({});
     await db.close();
+  });
+
+  it("binds the vulnerable connection to its player through an opaque context", async () => {
+    const userId = await createUser(db, "sqli_context_probe");
+    const context = await withSqliUserContext(userId, (client) =>
+      client.query<{ token: string; player: string | null }>(
+        `SELECT current_setting('sectrain.context_token', true) AS token,
+                sqli_challenge.current_player_id() AS player`,
+      ),
+    );
+    expect(context.rows[0]).toMatchObject({ player: userId });
+    expect(context.rows[0]!.token).toHaveLength(43);
   });
 
   it("a normal search never exposes the secret_flag column", async () => {
@@ -101,6 +114,53 @@ describe("SQL injection challenge (isolated schema + least-privilege role + RLS)
     expect(flagsInA.length).toBeGreaterThan(0);
     expect(flagsInB.length).toBeGreaterThan(0);
     expect(flagsInA[0]).not.toBe(flagsInB[0]);
+  });
+
+  it("keeps RLS isolation when injected SQL replaces the old GUC context", async () => {
+    const userA = await createUser(db, "sqli_context_a");
+    const userB = await createUser(db, "sqli_context_b");
+    await initializeProgress(userA);
+    await initializeProgress(userB);
+    await seedSqliItems(userA);
+    await seedSqliItems(userB);
+
+    const stacked = await searchItems(
+      userA,
+      `x'; SELECT set_config('app.current_user_id', '${userB}', true); -- `,
+    );
+    expect(stacked.error).toContain("isolation boundary");
+    expect(stacked.rows).toHaveLength(0);
+
+    const userBView = await searchItems(
+      userB,
+      "nonexistent' UNION SELECT id, secret_flag, 'x' FROM items -- ",
+    );
+    const userBFlag = userBView.rows
+      .flatMap((row) => Object.values(row))
+      .find(
+        (value): value is string =>
+          typeof value === "string" && value.startsWith("FLAG-SQLI-"),
+      );
+    expect(userBFlag).toBeDefined();
+
+    const unicodeEscapedSetConfig = await searchItems(
+      userA,
+      `nonexistent' UNION SELECT id, secret_flag, pg_catalog.U&"set\\005fconfig"('app.current_user_id', '${userB}', true) FROM items -- `,
+    );
+    expect(unicodeEscapedSetConfig.error).toBeUndefined();
+    expect(
+      unicodeEscapedSetConfig.rows.some((row) =>
+        Object.values(row).includes(userBFlag),
+      ),
+    ).toBe(false);
+    expect(
+      unicodeEscapedSetConfig.rows.some((row) =>
+        Object.values(row).some(
+          (value) =>
+            typeof value === "string" && value.startsWith("FLAG-SQLI-"),
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("the sqli_role connection cannot read credentials even via injection (schema/grant boundary)", async () => {

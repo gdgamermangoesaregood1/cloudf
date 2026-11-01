@@ -34,7 +34,7 @@ const SCRATCH_ROOT = path.join(__dirname, "..", ".pglite-tmp");
  * which is guaranteed here since the whole suite runs single-threaded and
  * fully sequential (see vitest.config.ts `fileParallelism: false`).
  */
-export async function createTestDb() {
+export async function createTestDb(options?: { throughMigration?: string }) {
   mkdirSync(SCRATCH_ROOT, { recursive: true });
   const dir = path.join(SCRATCH_ROOT, randomUUID());
   mkdirSync(dir, { recursive: true });
@@ -52,6 +52,7 @@ export async function createTestDb() {
   });
   const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
+    .filter((f) => !options?.throughMigration || f <= options.throughMigration)
     .sort();
   for (const file of files) {
     await bootstrap.exec(readFileSync(path.join(MIGRATIONS_DIR, file), "utf8"));
@@ -133,6 +134,17 @@ export async function createTestDb() {
     ownerPool: makePool(null),
     appPool: makePool("app_role"),
     sqliPool: makePool("sqli_role"),
+    async applyMigration(file: string) {
+      if (!/^\d{4}_[a-z0-9_]+\.sql$/.test(file)) {
+        throw new Error("Invalid migration file name.");
+      }
+      const pg = await openWithRole(null);
+      try {
+        await pg.exec(readFileSync(path.join(MIGRATIONS_DIR, file), "utf8"));
+      } finally {
+        pendingCloses.push(pg.close().catch(() => undefined));
+      }
+    },
     async close() {
       await Promise.allSettled(pendingCloses);
       rmSync(dir, { recursive: true, force: true });

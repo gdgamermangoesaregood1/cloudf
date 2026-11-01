@@ -7,6 +7,8 @@ import {
 import { getMessage, issueRenderToken } from "@/lib/challenges/xss";
 import { getChallengeMeta } from "@/lib/challenges/registry";
 import XssMessageForm from "@/components/XssMessageForm";
+import { EntitlementRequiredError } from "@/lib/billing/entitlements";
+import PremiumSolutionGuide from "@/components/PremiumSolutionGuide";
 
 export const metadata = { title: "Stored XSS Challenge — SecTrain" };
 
@@ -17,7 +19,11 @@ export default async function XssChallengePage() {
   try {
     await requireChallengeAccess(current.user.id, "xss");
   } catch (err) {
-    if (err instanceof ChallengeAccessError) redirect("/dashboard");
+    if (
+      err instanceof ChallengeAccessError ||
+      err instanceof EntitlementRequiredError
+    )
+      redirect("/dashboard");
     throw err;
   }
 
@@ -68,6 +74,7 @@ export default async function XssChallengePage() {
           completed.
         </p>
       </div>
+      <PremiumSolutionGuide userId={current.user.id} challengeKey="xss" />
     </div>
   );
 }

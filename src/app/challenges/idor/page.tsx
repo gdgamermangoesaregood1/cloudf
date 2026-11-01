@@ -6,6 +6,8 @@ import {
 } from "@/lib/challenges/progress";
 import { listPublicRecords, fetchRecordForPlayer } from "@/lib/challenges/idor";
 import { getChallengeMeta } from "@/lib/challenges/registry";
+import { EntitlementRequiredError } from "@/lib/billing/entitlements";
+import PremiumSolutionGuide from "@/components/PremiumSolutionGuide";
 
 export const metadata = { title: "IDOR Challenge — SecTrain" };
 
@@ -20,7 +22,11 @@ export default async function IdorChallengePage({
   try {
     await requireChallengeAccess(current.user.id, "idor");
   } catch (err) {
-    if (err instanceof ChallengeAccessError) redirect("/dashboard");
+    if (
+      err instanceof ChallengeAccessError ||
+      err instanceof EntitlementRequiredError
+    )
+      redirect("/dashboard");
     throw err;
   }
 
@@ -44,9 +50,7 @@ export default async function IdorChallengePage({
       <div className="card">
         <h2>Your company directory</h2>
         <p className="hint-text">
-          These records are visible to every employee in your world. The record
-          viewer below takes a record number — try more than what is linked
-          here.
+          These records are visible to every employee in your world.
         </p>
         <table>
           <thead>
@@ -74,25 +78,11 @@ export default async function IdorChallengePage({
 
       <div className="card">
         <h2>Record viewer</h2>
-        <form
-          method="get"
-          className="stack"
-          style={{ flexDirection: "row", alignItems: "end", gap: "0.75rem" }}
-        >
-          <div className="field" style={{ flex: 1 }}>
-            <label htmlFor="recordIndex">Record number</label>
-            <input
-              id="recordIndex"
-              name="recordIndex"
-              type="text"
-              inputMode="numeric"
-              defaultValue={recordIndex ?? ""}
-            />
-          </div>
-          <button type="submit">View record</button>
-        </form>
-
-        {viewed && (
+        {!viewed ? (
+          <p className="hint-text">
+            Select a directory entry above to open its record.
+          </p>
+        ) : (
           <div style={{ marginTop: "1.25rem" }}>
             {!viewed.found && (
               <p className="alert alert-error" role="alert">
@@ -120,6 +110,7 @@ export default async function IdorChallengePage({
           </div>
         )}
       </div>
+      <PremiumSolutionGuide userId={current.user.id} challengeKey="idor" />
     </div>
   );
 }

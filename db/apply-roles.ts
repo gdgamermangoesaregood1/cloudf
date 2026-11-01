@@ -47,6 +47,7 @@ async function main() {
     database: process.env.POSTGRES_DB ?? "security_training",
     user: process.env.POSTGRES_SUPERUSER ?? "postgres",
     password: process.env.POSTGRES_SUPERUSER_PASSWORD,
+    ssl: process.env.POSTGRES_SSL === "require",
   });
   await client.connect();
   try {

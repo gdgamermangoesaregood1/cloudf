@@ -4,10 +4,17 @@ import { getCurrentSession } from "@/lib/auth/session";
 import { getProgress } from "@/lib/challenges/progress";
 import { getChallengeMeta } from "@/lib/challenges/registry";
 import ResetProgressButton from "@/components/ResetProgressButton";
+import { getEntitlement } from "@/lib/billing/entitlements";
 
 export const metadata = { title: "Dashboard — SecTrain" };
 
-function statusBadge(unlocked: boolean, completedAt: string | null) {
+function statusBadge(
+  entitled: boolean,
+  unlocked: boolean,
+  completedAt: string | null,
+) {
+  if (!entitled)
+    return <span className="badge badge-locked">Subscription required</span>;
   if (completedAt)
     return <span className="badge badge-completed">Completed</span>;
   if (unlocked) return <span className="badge badge-unlocked">Unlocked</span>;
@@ -19,6 +26,7 @@ export default async function DashboardPage() {
   if (!current) redirect("/login");
 
   const progress = await getProgress(current.user.id);
+  const entitlement = await getEntitlement(current.user.id);
   const completedCount = progress.filter((p) => p.completedAt).length;
 
   return (
@@ -31,6 +39,18 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {!entitlement.active && (
+        <div className="card">
+          <p className="alert alert-error">
+            Your 15-day trial has ended. Challenge controls and hints are hidden
+            until you subscribe.
+          </p>
+          <Link href="/billing" className="btn">
+            Subscribe for $4/month
+          </Link>
+        </div>
+      )}
+
       <ul className="challenge-list">
         {progress.map((p) => {
           const meta = getChallengeMeta(p.key);
@@ -38,19 +58,22 @@ export default async function DashboardPage() {
             <li key={p.key} className="challenge-card">
               <div className="challenge-card-head">
                 <h2 style={{ margin: 0 }}>{meta.title}</h2>
-                {statusBadge(p.unlocked, p.completedAt)}
+                {statusBadge(entitlement.active, p.unlocked, p.completedAt)}
               </div>
+              <p className="hint-text">
+                Level {meta.order} · {meta.difficulty}
+              </p>
               <p>{meta.summary}</p>
-              {p.unlocked ? (
+              {entitlement.active && p.unlocked ? (
                 <Link href={meta.path} className="btn">
                   {p.completedAt ? "Revisit challenge" : "Open challenge"}
                 </Link>
-              ) : (
+              ) : entitlement.active ? (
                 <p className="hint-text">
                   Locked — complete the previous challenge to unlock this one.
                 </p>
-              )}
-              {p.unlocked && (
+              ) : null}
+              {entitlement.active && p.unlocked && (
                 <details className="hints">
                   <summary>Hints</summary>
                   <ol>
@@ -65,14 +88,16 @@ export default async function DashboardPage() {
         })}
       </ul>
 
-      <div className="card">
-        <h2>Reset progress</h2>
-        <p className="hint-text">
-          Regenerate a fresh world and flags, and re-lock every challenge except
-          the first. Only affects your own account.
-        </p>
-        <ResetProgressButton />
-      </div>
+      {entitlement.active && (
+        <div className="card">
+          <h2>Reset progress</h2>
+          <p className="hint-text">
+            Regenerate a fresh world and flags, and re-lock every challenge
+            except the first. Only affects your own account.
+          </p>
+          <ResetProgressButton />
+        </div>
+      )}
     </div>
   );
 }

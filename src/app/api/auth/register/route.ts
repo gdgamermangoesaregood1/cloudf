@@ -6,6 +6,9 @@ import { registerSchema } from "@/lib/auth/validation";
 import { initializeProgress } from "@/lib/challenges/progress";
 import { generateIdorWorld } from "@/lib/challenges/idor";
 import { seedSqliItems } from "@/lib/challenges/sqli";
+import { seedContainedLabs } from "@/lib/challenges/contained-labs";
+import { seedAdvancedLabs } from "@/lib/challenges/advanced-labs";
+import { initializeRegistrationTrial } from "@/lib/billing/entitlements";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { getClientIp } from "@/lib/security/client-ip";
 
@@ -59,9 +62,12 @@ export async function POST(request: NextRequest) {
       );
       userId = insertResult.rows[0]!.id;
 
+      await initializeRegistrationTrial(userId, client);
       await initializeProgress(userId, client);
       await generateIdorWorld(userId, client);
       await seedSqliItems(userId, client);
+      await seedContainedLabs(userId, client);
+      await seedAdvancedLabs(userId, client);
 
       await client.query("COMMIT");
     } catch (err) {

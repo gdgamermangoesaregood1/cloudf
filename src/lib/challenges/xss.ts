@@ -3,6 +3,7 @@ import { generateShortToken } from "@/lib/auth/tokens";
 import { generateFlag } from "@/lib/challenges/flag";
 import { getEnv } from "@/lib/env";
 import { completeChallenge } from "@/lib/challenges/progress";
+import { requireActiveEntitlement } from "@/lib/billing/entitlements";
 
 export async function getMessage(userId: string): Promise<string> {
   const result = await getAppPool().query<{ content: string }>(
@@ -106,6 +107,7 @@ export async function submitCallback(
       reason: "Invalid, expired, or already-used token.",
     };
   }
+  await requireActiveEntitlement(record.userId);
   if (record.flag !== flag) {
     return { success: false, reason: "Flag value does not match." };
   }

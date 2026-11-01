@@ -6,6 +6,7 @@ import {
 } from "@/lib/challenges/progress";
 import { saveMessage } from "@/lib/challenges/xss";
 import { z } from "zod";
+import { requireApiEntitlement } from "@/lib/billing/api-guard";
 
 const bodySchema = z.object({
   content: z.string().max(4000, "Message is too long."),
@@ -14,6 +15,8 @@ const bodySchema = z.object({
 export async function POST(request: Request) {
   const guard = await requireSessionWithCsrf(request);
   if (!guard.ok) return guard.response;
+  const entitlementResponse = await requireApiEntitlement(guard.user.id);
+  if (entitlementResponse) return entitlementResponse;
 
   try {
     await requireChallengeAccess(guard.user.id, "xss");

@@ -16,6 +16,9 @@ process.env.APP_DB_PASSWORD ??= "test-only-password";
 process.env.SQLI_DB_USER ??= "sqli_role";
 process.env.SQLI_DB_PASSWORD ??= "test-only-password";
 process.env.XSS_RENDER_TOKEN_TTL_MINUTES ??= "5";
+process.env.STRIPE_SECRET_KEY ??= "sk_test_placeholder";
+process.env.STRIPE_WEBHOOK_SECRET ??= "whsec_test_placeholder";
+process.env.STRIPE_PRICE_ID ??= "price_test_4_month";
 
 // pglite (WASM Postgres) occasionally rejects an already-in-flight internal
 // operation when its on-disk store is removed immediately after a

@@ -1,5 +1,7 @@
 import { getValidRenderToken, getMessage } from "@/lib/challenges/xss";
 import { buildXssFrameCsp } from "@/lib/security/headers";
+import { getEntitlement } from "@/lib/billing/entitlements";
+import { getEnv } from "@/lib/env";
 
 function escapeForScriptContext(value: string): string {
   // Only used for the trusted, server-generated token/flag values embedded
@@ -8,15 +10,14 @@ function escapeForScriptContext(value: string): string {
   return value.replace(/</g, "\\u003C").replace(/>/g, "\\u003E");
 }
 
-function renderErrorPage(message: string): Response {
+function renderErrorPage(message: string, appOrigin: string): Response {
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;color:#b91c1c;padding:2rem;">${message}</body></html>`;
   return new Response(html, {
     status: 400,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": buildXssFrameCsp(),
+      "Content-Security-Policy": buildXssFrameCsp(appOrigin),
       "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "SAMEORIGIN",
       "Cache-Control": "no-store",
     },
   });
@@ -29,22 +30,29 @@ function renderErrorPage(message: string): Response {
  * below, that gives this document:
  *   - an opaque ("null") origin: no cookies, no localStorage, no access to
  *     the parent page/DOM,
- *   - default-src 'none' / connect-src 'self': any script it runs can only
+ *   - default-src 'none' / app-origin connect-src: any script it runs can only
  *     ever reach back to THIS origin's own callback endpoint, never a
  *     third-party exfiltration server,
- *   - frame-ancestors 'self': it can only be embedded by our own app.
  * The player's raw, unsanitized content is rendered inside on purpose —
  * that is the entire point of the stored-XSS challenge.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const appOrigin = new URL(getEnv().APP_URL).origin;
   const rt = url.searchParams.get("rt");
-  if (!rt) return renderErrorPage("Missing render token.");
+  if (!rt) return renderErrorPage("Missing render token.", appOrigin);
 
   const record = await getValidRenderToken(rt);
   if (!record) {
     return renderErrorPage(
       "This preview link is invalid or has expired. Go back to the challenge page to get a fresh one.",
+      appOrigin,
+    );
+  }
+  if (!(await getEntitlement(record.userId)).active) {
+    return renderErrorPage(
+      "An active trial or subscription is required.",
+      appOrigin,
     );
   }
 
@@ -79,9 +87,8 @@ export async function GET(request: Request) {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": buildXssFrameCsp(),
+      "Content-Security-Policy": buildXssFrameCsp(appOrigin),
       "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "SAMEORIGIN",
       "Cache-Control": "no-store",
     },
   });

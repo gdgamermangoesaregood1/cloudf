@@ -1,16 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAppPool } from "@/lib/db/pool";
-import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { verifyPassword } from "@/lib/auth/password";
 import { createSessionAndSetCookies } from "@/lib/auth/session";
 import { loginSchema } from "@/lib/auth/validation";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { getClientIp } from "@/lib/security/client-ip";
 
-// Precomputed once so a "user not found" branch takes roughly the same time
-// as a real password verification, reducing username-enumeration via timing.
-const dummyHashPromise = hashPassword(
-  "not-a-real-password-used-only-for-timing",
-);
+// A fixed, non-secret dummy hash avoids randomness and costly hashing during
+// Worker startup while retaining password-verification timing on misses.
+const DUMMY_HASH =
+  "$argon2id$v=19$m=19456,t=2,p=1$MDEyMzQ1Njc4OWFiY2RlZg$GGlo5sAbi3HlpPRI3SRias6K37xkovZbLcgImjwbeG0";
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
@@ -74,7 +73,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!user) {
-    await verifyPassword(await dummyHashPromise, password);
+    await verifyPassword(DUMMY_HASH, password);
     return NextResponse.json(
       { error: "Invalid username or password." },
       { status: 401 },

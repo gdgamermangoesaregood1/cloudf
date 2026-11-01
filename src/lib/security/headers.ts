@@ -9,8 +9,10 @@ const isProd = process.env.NODE_ENV === "production";
  *  - frame-ancestors 'none': the app itself must never be framed by anyone,
  *    including itself, which also fully rules out clickjacking.
  */
-export function buildAppCsp(): string {
-  const scriptSrc = isProd ? "'self'" : "'self' 'unsafe-eval'";
+export function buildAppCsp(nonce: string): string {
+  const scriptSrc = isProd
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic'`
+    : `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`;
   return [
     "default-src 'self'",
     `script-src ${scriptSrc}`,
@@ -31,25 +33,24 @@ export function buildAppCsp(): string {
  * expected to run attacker/player-controlled inline script (that's the
  * point of the challenge) but:
  *  - cannot load or exfiltrate to any third-party origin (default-src
- *    'none', connect-src 'self' only reaches our own callback endpoint),
- *  - can only ever be framed by our own top-level app (frame-ancestors
- *    'self'), never embedded elsewhere,
+ *    'none', connect-src is restricted to the app origin's callback endpoint),
+ *  - the parent page's iframe sandbox gives the document an opaque origin,
+ *    so legacy frame-origin checks cannot be used on this response,
  *  - is additionally constrained by the parent's <iframe sandbox="...">
  *    attribute (no `allow-same-origin`), which gives it an opaque origin
  *    with no access to cookies, storage, or the parent DOM regardless of
  *    this CSP.
  */
-export function buildXssFrameCsp(): string {
+export function buildXssFrameCsp(appOrigin = "'self'"): string {
   return [
     "default-src 'none'",
     "script-src 'unsafe-inline'",
     "style-src 'unsafe-inline'",
     "img-src 'self'",
-    "connect-src 'self'",
+    `connect-src ${appOrigin}`,
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
-    "frame-ancestors 'self'",
   ].join("; ");
 }
 

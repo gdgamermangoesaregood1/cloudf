@@ -6,6 +6,8 @@ import {
 } from "@/lib/challenges/progress";
 import { searchItems } from "@/lib/challenges/sqli";
 import { getChallengeMeta } from "@/lib/challenges/registry";
+import { EntitlementRequiredError } from "@/lib/billing/entitlements";
+import PremiumSolutionGuide from "@/components/PremiumSolutionGuide";
 
 export const metadata = { title: "SQL Injection Challenge — SecTrain" };
 
@@ -20,7 +22,11 @@ export default async function SqliChallengePage({
   try {
     await requireChallengeAccess(current.user.id, "sqli");
   } catch (err) {
-    if (err instanceof ChallengeAccessError) redirect("/dashboard");
+    if (
+      err instanceof ChallengeAccessError ||
+      err instanceof EntitlementRequiredError
+    )
+      redirect("/dashboard");
     throw err;
   }
 
@@ -95,6 +101,7 @@ export default async function SqliChallengePage({
           </div>
         )}
       </div>
+      <PremiumSolutionGuide userId={current.user.id} challengeKey="sqli" />
     </div>
   );
 }

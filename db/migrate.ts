@@ -31,6 +31,7 @@ async function main() {
     database: requireEnv("POSTGRES_DB"),
     user: requireEnv("POSTGRES_SUPERUSER"),
     password: requireEnv("POSTGRES_SUPERUSER_PASSWORD"),
+    ssl: process.env.POSTGRES_SSL === "require",
   });
 
   await client.connect();

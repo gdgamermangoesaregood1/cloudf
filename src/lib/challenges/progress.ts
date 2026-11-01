@@ -5,6 +5,7 @@ import {
   nextChallengeKey,
   type ChallengeKey,
 } from "@/lib/challenges/registry";
+import { requireActiveEntitlement } from "@/lib/billing/entitlements";
 
 export class ChallengeAccessError extends Error {
   constructor(
@@ -28,7 +29,7 @@ export interface QueryableClient {
   query(sql: string, params?: unknown[]): Promise<unknown>;
 }
 
-/** Seeds the fixed 3-row progress table for a brand-new (or reset) player. */
+/** Seeds the fixed curriculum progress table for a brand-new (or reset) player. */
 export async function initializeProgress(
   userId: string,
   client: QueryableClient = getAppPool(),
@@ -36,13 +37,18 @@ export async function initializeProgress(
   await client.query("DELETE FROM challenge_progress WHERE user_id = $1", [
     userId,
   ]);
-  for (const c of CHALLENGES) {
-    await client.query(
-      `INSERT INTO challenge_progress (user_id, challenge_key, sort_order, unlocked, completed_at)
-       VALUES ($1, $2, $3, $4, NULL)`,
-      [userId, c.key, c.order, c.order === 1],
-    );
-  }
+  const values: unknown[] = [];
+  const rows = CHALLENGES.map((challenge, index) => {
+    const offset = index * 4;
+    values.push(userId, challenge.key, challenge.order, challenge.order === 1);
+    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, NULL)`;
+  });
+  await client.query(
+    `INSERT INTO challenge_progress
+       (user_id, challenge_key, sort_order, unlocked, completed_at)
+     VALUES ${rows.join(", ")}`,
+    values,
+  );
 }
 
 export async function getProgress(
@@ -81,6 +87,7 @@ export async function requireChallengeAccess(
   userId: string,
   key: ChallengeKey,
 ): Promise<void> {
+  await requireActiveEntitlement(userId);
   const meta = getChallengeMeta(key);
   const progress = await getProgress(userId);
   const row = progress.find((p) => p.key === key);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { submitCallback } from "@/lib/challenges/xss";
+import { getValidRenderToken, submitCallback } from "@/lib/challenges/xss";
+import { getEntitlement } from "@/lib/billing/entitlements";
 
 /**
  * The "safe server callback" a successful stored-XSS payload calls to prove
@@ -24,6 +25,13 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { success: false, reason: "Missing rt or flag." },
       { status: 400 },
+    );
+  }
+  const record = await getValidRenderToken(rt);
+  if (!record || !(await getEntitlement(record.userId)).active) {
+    return NextResponse.json(
+      { success: false, reason: "Active challenge access is required." },
+      { status: 403 },
     );
   }
 

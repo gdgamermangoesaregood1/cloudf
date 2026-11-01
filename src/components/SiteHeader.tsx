@@ -21,6 +21,9 @@ export default function SiteHeader({ username }: { username: string | null }) {
               <span className="hint-text">
                 Signed in as <strong>{username}</strong>
               </span>
+              <Link href="/billing" className="btn-secondary btn">
+                Billing
+              </Link>
               <LogoutButton />
             </div>
           ) : (

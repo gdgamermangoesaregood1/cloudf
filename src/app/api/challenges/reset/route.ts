@@ -4,17 +4,23 @@ import { getAppPool } from "@/lib/db/pool";
 import { initializeProgress } from "@/lib/challenges/progress";
 import { generateIdorWorld } from "@/lib/challenges/idor";
 import { seedSqliItems } from "@/lib/challenges/sqli";
+import { seedContainedLabs } from "@/lib/challenges/contained-labs";
+import { requireApiEntitlement } from "@/lib/billing/api-guard";
+import { seedAdvancedLabs } from "@/lib/challenges/advanced-labs";
 
 /**
  * Resets a player back to a fresh start: wipes and regenerates their IDOR
  * world and SQLi flags, clears their guestbook message/XSS render tokens,
- * and re-locks everything except the first challenge. Scoped entirely by
+ * resets all contained simulator state, and re-locks everything except the
+ * first challenge. Scoped entirely by
  * the authenticated user's own id — cannot affect any other player.
  */
 export async function POST(request: Request) {
   const guard = await requireSessionWithCsrf(request);
   if (!guard.ok) return guard.response;
   const userId = guard.user.id;
+  const entitlementResponse = await requireApiEntitlement(userId);
+  if (entitlementResponse) return entitlementResponse;
 
   try {
     const pool = getAppPool();
@@ -24,6 +30,8 @@ export async function POST(request: Request) {
       await initializeProgress(userId, client);
       await generateIdorWorld(userId, client);
       await seedSqliItems(userId, client);
+      await seedContainedLabs(userId, client);
+      await seedAdvancedLabs(userId, client);
       await client.query("DELETE FROM xss_messages WHERE user_id = $1", [
         userId,
       ]);

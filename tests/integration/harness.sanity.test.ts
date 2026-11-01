@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { createTestDb } from "./db-test-harness";
+import { __setPoolsForTests, withSqliUserContext } from "@/lib/db/pool";
 
 describe("db test harness sanity", () => {
   it("migrates cleanly and enforces the sqli_role/app_role privilege boundary", async () => {
     const db = await createTestDb();
+    __setPoolsForTests({ appPool: db.appPool, sqliPool: db.sqliPool });
     try {
       const userId = "11111111-1111-1111-1111-111111111111";
       await db.ownerPool.query(
@@ -15,21 +17,10 @@ describe("db test harness sanity", () => {
         [userId, "Item", "Desc", "FLAG-SQLI-abc123"],
       );
 
-      // sqli_role can select its own scoped row once app.current_user_id is set
-      // for the duration of a transaction (set_config's third arg = true means
-      // "local to transaction", matching src/lib/db/pool.ts withSqliUserContext).
-      const sqliClient = await db.sqliPool.connect();
-      await sqliClient.query("BEGIN");
-      await sqliClient.query(
-        "SELECT set_config('app.current_user_id', $1, true)",
-        [userId],
+      const scoped = await withSqliUserContext(userId, (client) =>
+        client.query<{ title: string }>("SELECT title FROM items"),
       );
-      const scoped = await sqliClient.query<{ title: string }>(
-        "SELECT title FROM items",
-      );
-      await sqliClient.query("COMMIT");
       expect(scoped.rows).toHaveLength(1);
-      sqliClient.release();
 
       // sqli_role must never be able to read the users table.
       const sqliClient2 = await db.sqliPool.connect();
@@ -45,6 +36,7 @@ describe("db test harness sanity", () => {
       ).rejects.toThrow();
       appClient.release();
     } finally {
+      __setPoolsForTests({});
       await db.close();
     }
   });

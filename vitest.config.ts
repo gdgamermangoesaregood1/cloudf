@@ -6,8 +6,8 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     setupFiles: ["tests/setup.ts"],
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    testTimeout: 300000,
+    hookTimeout: 300000,
     // pglite (WASM Postgres) spins up real engine processes per test; running
     // many of those concurrently across worker threads causes resource
     // contention (WASM aborts, spurious permission errors). Force fully

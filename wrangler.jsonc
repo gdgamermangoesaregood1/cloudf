@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cloudf",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "cloudf",
+    },
+  ],
+  "vars": {
+    "COOKIE_SECURE": "true",
+    "POSTGRES_SSL": "require",
+    "DB_POOL_MODE": "single-use",
+  },
+  "limits": {
+    "cpu_ms": 30000,
+  },
+  "observability": {
+    "enabled": true,
+  },
+}

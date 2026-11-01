@@ -26,4 +26,24 @@ describe("password hashing (argon2id)", () => {
       false,
     );
   });
+
+  it.each([
+    [
+      "legacy-password-123",
+      "$argon2id$v=19$m=19456,t=2,p=1$MDEyMzQ1Njc4OWFiY2RlZg$GGlo5sAbi3HlpPRI3SRias6K37xkovZbLcgImjwbeG0",
+    ],
+    [
+      "p\u00e4ss\u{1f510}word",
+      "$argon2id$v=19$m=19456,t=2,p=1$MDEyMzQ1Njc4OWFiY2RlZg$oE8837mS57u8cVwCwf+lm6yryWbmRJEAkX7TsOw8F/A",
+    ],
+  ])("verifies a legacy native Argon2 hash for %s", async (password, hash) => {
+    expect(await verifyPassword(hash, password)).toBe(true);
+    expect(await verifyPassword(hash, `${password}-wrong`)).toBe(false);
+  });
+
+  it("rejects unsupported cost parameters without allocating their memory", async () => {
+    const hash =
+      "$argon2id$v=19$m=1048576,t=99,p=1$MDEyMzQ1Njc4OWFiY2RlZg$GGlo5sAbi3HlpPRI3SRias6K37xkovZbLcgImjwbeG0";
+    expect(await verifyPassword(hash, "legacy-password-123")).toBe(false);
+  });
 });
